@@ -82,6 +82,11 @@
             border-radius: 3px;
             font-family: monospace;
         }
+        .shortcut-hint {
+            color: #999;
+            font-size: 12px;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -101,12 +106,26 @@
             <button onclick="saveConfig()" style="margin-top: 8px;">保存配置</button>
         </div>
         <textarea id="diaryInput" placeholder="写下今天发生的事情..."></textarea>
+        <div class="shortcut-hint">💡 按 Ctrl+Enter 快速保存</div>
         <button onclick="saveDiary()" id="saveBtn">保存日记</button>
     </div>
     
     <div id="diaryList" class="loading">加载中...</div>
 
     <script>
+        // 回车键提交功能
+        document.addEventListener('DOMContentLoaded', function() {
+            const textarea = document.getElementById('diaryInput');
+            
+            textarea.addEventListener('keydown', function(e) {
+                // Ctrl+Enter 或 Cmd+Enter 提交
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    saveDiary();
+                }
+            });
+        });
+
         const CONFIG_KEY = 'github_diary_config';
         const DATA_FILE = 'diaries.json';
         
