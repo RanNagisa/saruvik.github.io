@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>留言板</title>
+    <title>我的日记本</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -13,13 +13,8 @@
             max-width: 800px;
             margin: 0 auto;
         }
-        h1 { 
-            text-align: center; 
-            margin-bottom: 30px; 
-            color: #333;
-        }
+        h1 { text-align: center; margin-bottom: 30px; color: #333; }
         
-        /* 写-区域 */
         #editor {
             background: white;
             padding: 20px;
@@ -46,8 +41,8 @@
             margin-top: 10px;
         }
         button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
         
-        /* 留言列表 */
         .diary-item {
             background: white;
             padding: 20px;
@@ -72,76 +67,208 @@
             margin-top: 10px;
         }
         .delete-btn:hover { background: #c82333; }
+        .loading { text-align: center; color: #999; padding: 20px; }
+        #setupInfo {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        #setupInfo code {
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
     </style>
 </head>
 <body>
-    <h1>📔 留言板</h1>
+    <h1>📔 我的日记本</h1>
     
+    <div id="setupInfo">
+        <strong>⚠️ 首次使用需要设置:</strong><br>
+        1. 创建 GitHub Personal Access Token (Settings → Developer settings → Personal access tokens → Tokens (classic))<br>
+        2. 权限勾选: <code>repo</code><br>
+        3. 在下方输入框填入 Token 和仓库信息
+    </div>
+
     <div id="editor">
-        <textarea id="diaryInput" placeholder="对我说点什么吧"></textarea>
-        <button onclick="saveDiary()">上传</button>
+        <div style="margin-bottom: 15px; padding: 15px; background: #f8f9fa; border-radius: 4px;">
+            <input type="text" id="tokenInput" placeholder="GitHub Token" style="width: 100%; padding: 8px; margin-bottom: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            <input type="text" id="repoInput" placeholder="仓库名 (例: username/username.github.io)" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            <button onclick="saveConfig()" style="margin-top: 8px;">保存配置</button>
+        </div>
+        <textarea id="diaryInput" placeholder="写下今天发生的事情..."></textarea>
+        <button onclick="saveDiary()" id="saveBtn">保存日记</button>
     </div>
     
-    <div id="diaryList"></div>
+    <div id="diaryList" class="loading">加载中...</div>
 
     <script>
-        function getDiaries() {
-            const diaries = localStorage.getItem('diaries');
-            return diaries ? JSON.parse(diaries) : [];
+        const CONFIG_KEY = 'github_diary_config';
+        const DATA_FILE = 'diaries.json';
+        
+        let config = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
+        
+        // 初始化
+        if (config.token && config.repo) {
+            document.getElementById('tokenInput').value = config.token;
+            document.getElementById('repoInput').value = config.repo;
+            document.getElementById('setupInfo').style.display = 'none';
+            loadDiaries();
         }
 
-        function saveDiary() {
+        function saveConfig() {
+            const token = document.getElementById('tokenInput').value.trim();
+            const repo = document.getElementById('repoInput').value.trim();
+            
+            if (!token || !repo) {
+                alert('请填写完整信息');
+                return;
+            }
+            
+            config = { token, repo };
+            localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+            document.getElementById('setupInfo').style.display = 'none';
+            alert('配置已保存');
+            loadDiaries();
+        }
+
+        async function getFileSha() {
+            try {
+                const response = await fetch(
+                    `https://api.github.com/repos/${config.repo}/contents/${DATA_FILE}`,
+                    {
+                        headers: {
+                            'Authorization': `token ${config.token}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    }
+                );
+                if (response.ok) {
+                    const data = await response.json();
+                    return { sha: data.sha, content: JSON.parse(atob(data.content)) };
+                }
+                return { sha: null, content: [] };
+            } catch (e) {
+                return { sha: null, content: [] };
+            }
+        }
+
+        async function saveDiary() {
             const content = document.getElementById('diaryInput').value.trim();
             if (!content) {
-                alert('写点什么吧');
+                alert('请写点什么再保存~');
+                return;
+            }
+            
+            if (!config.token || !config.repo) {
+                alert('请先配置 GitHub Token 和仓库');
                 return;
             }
 
-            const diaries = getDiaries();
-            const newDiary = {
-                id: Date.now(),
-                content: content,
-                date: new Date().toLocaleString('zh-CN')
-            };
-            
-            diaries.unshift(newDiary);
-            localStorage.setItem('diaries', JSON.stringify(diaries));
-            
-            document.getElementById('diaryInput').value = '';
-            displayDiaries();
+            document.getElementById('saveBtn').disabled = true;
+            document.getElementById('saveBtn').textContent = '保存中...';
+
+            try {
+                const { sha, content: diaries } = await getFileSha();
+                
+                const newDiary = {
+                    id: Date.now(),
+                    content: content,
+                    date: new Date().toLocaleString('zh-CN')
+                };
+                
+                diaries.unshift(newDiary);
+                
+                const response = await fetch(
+                    `https://api.github.com/repos/${config.repo}/contents/${DATA_FILE}`,
+                    {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `token ${config.token}`,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            message: `Add diary ${newDiary.id}`,
+                            content: btoa(unescape(encodeURIComponent(JSON.stringify(diaries, null, 2)))),
+                            sha: sha
+                        })
+                    }
+                );
+
+                if (response.ok) {
+                    document.getElementById('diaryInput').value = '';
+                    loadDiaries();
+                } else {
+                    alert('保存失败: ' + response.statusText);
+                }
+            } catch (e) {
+                alert('保存失败: ' + e.message);
+            }
+
+            document.getElementById('saveBtn').disabled = false;
+            document.getElementById('saveBtn').textContent = '保存日记';
         }
 
-        // 删除日记
-        function deleteDiary(id) {
-            if (!confirm('确定要删除吗?')) return;
-            
-            let diaries = getDiaries();
-            diaries = diaries.filter(d => d.id !== id);
-            localStorage.setItem('diaries', JSON.stringify(diaries));
-            displayDiaries();
+        async function deleteDiary(id) {
+            if (!confirm('确定要删除这篇日记吗?')) return;
+
+            try {
+                const { sha, content: diaries } = await getFileSha();
+                const filtered = diaries.filter(d => d.id !== id);
+                
+                const response = await fetch(
+                    `https://api.github.com/repos/${config.repo}/contents/${DATA_FILE}`,
+                    {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `token ${config.token}`,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            message: `Delete diary ${id}`,
+                            content: btoa(unescape(encodeURIComponent(JSON.stringify(filtered, null, 2)))),
+                            sha: sha
+                        })
+                    }
+                );
+
+                if (response.ok) {
+                    loadDiaries();
+                } else {
+                    alert('删除失败');
+                }
+            } catch (e) {
+                alert('删除失败: ' + e.message);
+            }
         }
 
-        // 显示所有日记
-        function displayDiaries() {
-            const diaries = getDiaries();
+        async function loadDiaries() {
             const listDiv = document.getElementById('diaryList');
-            
-            if (diaries.length === 0) {
-                listDiv.innerHTML = '<p style="text-align:center;color:#999;"></p>';
-                return;
-            }
-            
-            listDiv.innerHTML = diaries.map(diary => `
-                <div class="diary-item">
-                    <div class="diary-date">${diary.date}</div>
-                    <div class="diary-content">${diary.content}</div>
-                    <button class="delete-btn" onclick="deleteDiary(${diary.id})">删除</button>
-                </div>
-            `).join('');
-        }
+            listDiv.innerHTML = '<div class="loading">加载中...</div>';
 
-        // 页面加载时显示日记
-        displayDiaries();
+            try {
+                const { content: diaries } = await getFileSha();
+                
+                if (diaries.length === 0) {
+                    listDiv.innerHTML = '<p style="text-align:center;color:#999;">还没有日记,开始写第一篇吧!</p>';
+                    return;
+                }
+                
+                listDiv.innerHTML = diaries.map(diary => `
+                    <div class="diary-item">
+                        <div class="diary-date">${diary.date}</div>
+                        <div class="diary-content">${diary.content}</div>
+                        <button class="delete-btn" onclick="deleteDiary(${diary.id})">删除</button>
+                    </div>
+                `).join('');
+            } catch (e) {
+                listDiv.innerHTML = '<p style="text-align:center;color:#f00;">加载失败,请检查配置</p>';
+            }
+        }
     </script>
 </body>
 </html>
