@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>我的日记本</title>
+    <title>留言板</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -19,7 +19,7 @@
             color: #333;
         }
         
-        /* 写日记区域 */
+        /* 写-区域 */
         #editor {
             background: white;
             padding: 20px;
@@ -47,7 +47,7 @@
         }
         button:hover { background: #0056b3; }
         
-        /* 日记列表 */
+        /* 留言列表 */
         .diary-item {
             background: white;
             padding: 20px;
@@ -75,27 +75,25 @@
     </style>
 </head>
 <body>
-    <h1>📔 我的日记本</h1>
+    <h1>📔 留言板</h1>
     
     <div id="editor">
-        <textarea id="diaryInput" placeholder="写下今天发生的事情..."></textarea>
-        <button onclick="saveDiary()">保存日记</button>
+        <textarea id="diaryInput" placeholder="对我说点什么吧"></textarea>
+        <button onclick="saveDiary()">上传</button>
     </div>
     
     <div id="diaryList"></div>
 
     <script>
-        // 获取所有日记
         function getDiaries() {
             const diaries = localStorage.getItem('diaries');
             return diaries ? JSON.parse(diaries) : [];
         }
 
-        // 保存日记
         function saveDiary() {
             const content = document.getElementById('diaryInput').value.trim();
             if (!content) {
-                alert('请写点什么再保存~');
+                alert('写点什么吧');
                 return;
             }
 
@@ -115,7 +113,7 @@
 
         // 删除日记
         function deleteDiary(id) {
-            if (!confirm('确定要删除这篇日记吗?')) return;
+            if (!confirm('确定要删除吗?')) return;
             
             let diaries = getDiaries();
             diaries = diaries.filter(d => d.id !== id);
@@ -129,7 +127,7 @@
             const listDiv = document.getElementById('diaryList');
             
             if (diaries.length === 0) {
-                listDiv.innerHTML = '<p style="text-align:center;color:#999;">还没有日记,开始写第一篇吧!</p>';
+                listDiv.innerHTML = '<p style="text-align:center;color:#999;"></p>';
                 return;
             }
             
